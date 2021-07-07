@@ -1,0 +1,72 @@
+pipeline {
+   agent {
+        node {
+            label 'jnlp-cbs-node'
+        }
+    }
+    environment{
+        SONARQUBE_HOME = tool 'Sonarqube-Scanner'
+        JAVA_HOME = tool 'java'
+    }
+
+   stages {
+        stage('Cleanup') {
+         steps {
+            cleanWs()
+         }
+      }
+      stage('Hello sample project') {
+         steps {
+            echo 'Welcome To sample pipeline'
+         }
+      }
+      stage('gitclone') {
+         steps {
+           git branch: 'main', url: 'https://github.com/learn-devops-fast/rock-paper-scissors.git'
+         }
+      }
+      stage('Building the pipeline') {
+         steps {
+           sh label: '', script: '''echo "sample demoproject"
+           #${JAVA_HOME}/bin/java
+           #JAVA_HOME=/bin/java
+            whereis java
+            ./mvnw package'''
+         }
+      }
+      stage("SonarQube analysis") {
+            steps {
+              withSonarQubeEnv('GBS-TEST-SONAR') {
+                sh "${SONARQUBE_HOME}/bin/sonar-scanner " + 
+				" mvn sonar:sonar "
+                "-Dsonar.host.url=https://gbssonartest.edst.ibm.com  " +
+                "-Dsonar.login=b9aa561021c8e70e5652b5a97e1e00ef859b3981 " +
+                "-Dsonar.projectKey=3ee9774f618d425bf9a5ad925af42876d1390d0a  +
+                "-Dsonar.sources=src " +
+                "-Dsonar.java.binaries=target/classes/**/* "	
+              }
+            }
+          }
+        
+        stage('UCD') {
+            steps{
+                echo 'started deploying in UCD'
+                step([$class: 'UCDeployPublisher',
+                    siteName: 'test-ucd',
+                    component: [
+                        $class: 'com.urbancode.jenkins.plugins.ucdeploy.VersionHelper$VersionBlock',
+                        componentName: 'ucd_integration',
+                        delivery: [
+                            $class: 'com.urbancode.jenkins.plugins.ucdeploy.DeliveryHelper$Push',
+                            pushVersion: '${BUILD_NUMBER}',
+                            baseDir: "${WORKSPACE}/target/classes",
+                            pushDescription: 'Pushed artifacts from Jenkins'
+                        ]
+                    ]
+                    
+                ])
+            }
+            }
+          
+   }
+}
